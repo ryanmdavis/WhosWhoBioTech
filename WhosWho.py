@@ -5,7 +5,6 @@ from nltk.corpus import stopwords
 from sklearn.metrics.pairwise import linear_kernel
 from summa import keywords
 import numpy as np
-import code_classifier_chunker
 from collections import Counter
 import operator
 import itertools
@@ -16,6 +15,7 @@ class WhosWhoBioTech(object):
         print 'Reding corpus'
         self.raw_text_list,self.text_list,self.keyword_list,self.num_keywords_list=self.getTextAndKeywords('/home/ryan/Dropbox/Code/Data/FierceBiotech')
         self.removeDuplicateFiles()
+        print 'Corpus contains ' + str(len(self.text_list)) + ' unique files'
         print 'Training tf-idf table'
         self.tfs, self.tfidf=self.createTfidfTable(self.text_list)
         self.grammar_textrank='{<NN.*>}'
@@ -337,15 +337,17 @@ class WhosWhoBioTech(object):
         grammar_tf=g1
         doc_num=0
         
-        ## find the most relevant documents by using a tfidf search of the corpus for the query   
+        ## find the most relevant documents by using a tfidf search of the corpus for the query
+        ## the algorithm only consider's documents that have a cosine_similarity greater than one tenth of the maximum cos_sim
+        ## this ensures that we don't consider documents of minimal relevance.
         response=self.tfidf.transform([query])
         cosine_similarities = linear_kernel(self.tfs, response).flatten() #here, tfs has the actual tfidf matrix
         sorted_cs_arg=cosine_similarities.argsort()[::-1]
         sorted_cosine_similarities=cosine_similarities[sorted_cs_arg]
         #top_docs_indicies=sorted_cosine_similarities[:-11:-1]
-        top_docs_indicies=[sorted_cs_arg[x] for x in range(10) if sorted_cosine_similarities[x]>0]
+        top_docs_indicies=[sorted_cs_arg[x] for x in range(3) if sorted_cosine_similarities[x]>sorted_cosine_similarities[0]/10]
         top_docs=[self.text_list[x] for x in top_docs_indicies]
-        #print 'Found ' + str(len(top_docs)) + ' documents matching query "' + query + '"'
+        print 'Found ' + str(len(top_docs)) + ' documents relevant to query "' + query + '"'
 
         ## extract keywords from the top 10 matches from the tfidf query
         if kw_algorithm=='textrank':
@@ -356,9 +358,9 @@ class WhosWhoBioTech(object):
             self.regexp_list,self.num_regexp_list = self.getRegExps('KW: '+grammar_tf)
             top_docs_regexp=[self.regexp_list[x] for x in top_docs_indicies]
             keyword_list = self.getKeywordsByTfidf(top_docs_regexp, [10]*len(top_docs_indicies))
+        
         ## find the named entities for each document
         # remove characters that can't be encoded to ascii
-
         whos_who=[]
         for doc_num in range(len(top_docs_indicies)):
             #ascii_compatible = self.raw_text_list[top_docs_indicies[0]].encode('utf-8','ignore').decode('utf-8')
@@ -415,7 +417,7 @@ class WhosWhoBioTech(object):
         if not bool(whos_who):
             print('Unfortunately there are no key people in the corpus matching the query '+query)
         else:
-            print 'Who''s who for the query ' + query
+            print 'Who''s who for the query "' + query + '":'
             print(whos_who)
         return whos_who            
 
